@@ -1,0 +1,10 @@
+# requirements.txt
+# ========== 核心必选 ==========
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+python-multipart
+
+# ========== 可选扩展（llm/图像） ==========
+# ollama
+# Pillow>=10.0
