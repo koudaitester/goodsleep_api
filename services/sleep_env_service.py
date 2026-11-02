@@ -4,25 +4,67 @@ from services.log_service import logger
 
 RULES = [
     {
-        "id": "water_stain",
-        "test": lambda v, e: v and (("water stain" in v.mold_moisture) or ("water stain" in v.wall_ceiling) or ("mold" in v.mold_moisture) or ("damp" in v.mold_moisture)),
-        "desc": "墙面存在潮湿痕迹，霉菌风险上升",
-        "suggest": "及时处理墙面渗水，保持干燥通风",
-        "delta": 0.22
+        "id": "temp_high",
+        "test": lambda v, e: e.temperature is not None and e.temperature > 25,
+        "desc": "温度高于舒适睡眠区间，高温更容易造成入睡困难",
+        "suggest": "降低室温至20–25℃",
+        "delta": 0.20
+    },
+    {
+        "id": "temp_low",
+        "test": lambda v, e: e.temperature is not None and e.temperature < 20,
+        "desc": "温度低于舒适睡眠区间，偏凉会影响睡眠体感",
+        "suggest": "调高室温至20–25℃",
+        "delta": 0.10
+    },
+    {
+        "id": "hum_high",
+        "test": lambda v, e: e.humidity is not None and e.humidity > 55,
+        "desc": "湿度过高，利于霉菌滋生",
+        "suggest": "开启除湿，湿度控制在45–55%区间",
+        "delta": 0.15
+    },
+    {
+        "id": "hum_low",
+        "test": lambda v, e: e.humidity is not None and e.humidity < 45,
+        "desc": "湿度偏低，容易咽干不适",
+        "suggest": "适度加湿，湿度维持45–55%区间",
+        "delta": 0.10
+    },
+    {
+        "id": "stain_only",
+        "test": lambda v, e: v and ("water stain" in v.mold_moisture or "water stain" in v.wall_ceiling) and not ("mold" in v.mold_moisture or "damp" in v.mold_moisture),
+        "desc": "墙面可见水渍痕迹，存在后续滋生霉菌的潜在条件",
+        "suggest": "及时擦干水渍，保持墙面干燥，定期观察是否长出霉菌",
+        "delta": 0.10
+    },
+    {
+        "id": "mold_exist",
+        "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture),
+        "desc": "墙面识别出霉菌/潮湿痕迹，存在霉菌暴露风险",
+        "suggest": "尽快清理霉菌，排查渗水源头，加强通风除湿",
+        "delta": 0.12
+    },
+    {
+        "id": "mold_grow_risk",
+        "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture) and e.humidity is not None and e.humidity > 55,
+        "desc": "存在霉菌痕迹且湿度过高，环境适合霉菌孢子持续增殖",
+        "suggest": "立即开启除湿设备，把湿度降到55%以下，配合开窗通风",
+        "delta": 0.20
     },
     {
         "id": "clutter",
         "test": lambda v, e: v and ("disarray" in v.clutter_level or "scattered" in v.clutter_level or "cluttered" in v.clutter_level),
         "desc": "床边物品杂乱，容易造成心理干扰",
         "suggest": "收纳床边散落物品，简化卧室视觉负担",
-        "delta": 0.16
+        "delta": 0.05
     },
     {
         "id": "bedding_rumpled",
         "test": lambda v, e: v and v.bedding_status == "rumpled",
         "desc": "床品褶皱凌乱，不利于放松入睡",
         "suggest": "整理床品，维持整洁的睡眠环境",
-        "delta": 0.10
+        "delta": 0.08
     },
     {
         "id": "vent_closed",
@@ -60,41 +102,34 @@ RULES = [
         "delta": 0.11
     },
     {
-        "id": "hum_high",
-        "test": lambda v, e: e.humidity is not None and e.humidity > 65,
-        "desc": "湿度过高，利于霉菌滋生",
-        "suggest": "开启除湿，湿度控制在40–60%区间",
-        "delta": 0.14
-    },
-    {
-        "id": "hum_low",
-        "test": lambda v, e: e.humidity is not None and e.humidity < 35,
-        "desc": "湿度偏低，容易咽干不适",
-        "suggest": "适度加湿",
-        "delta": 0.08
-    },
-    {
-        "id": "temp_bad",
-        "test": lambda v, e: e.temperature is not None and (e.temperature < 16 or e.temperature > 24),
-        "desc": "温度偏离舒适睡眠区间",
-        "suggest": "调整室温至18–22℃",
-        "delta": 0.10
-    },
-    {
         "id": "mold_risk_high",
         "test": lambda v, e: e.mold_risk_level in ("中等", "高"),
         "desc": lambda v, e: f"霉菌评估风险：{e.mold_risk_level}",
         "suggest": "重点排查潮湿源，除霉通风",
         "delta": 0.25
     }
+    
 ]
 
 GRADE_MAP = [
-    {"min_hit": 3, "level": "高风险", "cls": "risk-high"},
-    {"min_hit": 1, "level": "中等风险", "cls": "risk-medium"},
-    {"min_hit": 0, "level": "低风险", "cls": "risk-low"},
+    {"min_p": 0.6, "level": "高风险", "cls": "risk-high"},
+    {"min_p": 0.4, "level": "中等风险", "cls": "risk-medium"},
+    {"min_p": 0, "level": "低风险", "cls": "risk-low"},
 ]
 
+def filter_conflict_rules(hit_rule_ids: list[str]) -> list[str]:
+    hit_set = set(hit_rule_ids)
+    out = []
+    for rid in hit_rule_ids:
+        # 有水渍并且命中任意霉菌规则，去掉水渍
+        if rid == "stain_only" and ("mold_exist" in hit_set or "mold_grow_risk" in hit_set):
+            continue
+        # 同时命中mold_exist 和 mold_grow_risk：保留mold_grow_risk，丢掉mold_exist
+        if rid == "mold_exist" and "mold_grow_risk" in hit_set:
+            continue
+        out.append(rid)
+    logger.info(f"[SleepEval] filter_conflict_rules: input={hit_rule_ids}, output={out}")
+    return out
 
 class SleepEnvService:
     async def evaluate(self, req: SleepEnvEvalReq) -> SleepEnvEvalResp:
@@ -112,20 +147,29 @@ class SleepEnvService:
         for rule in RULES:
             if rule["test"](vision, req):
                 hit_ids.append(rule["id"])
-                d = rule["desc"](vision, req) if callable(rule["desc"]) else rule["desc"]
-                s = rule["suggest"]
-                desc_items.append(d)
-                suggest_items.append(s)
-                trace.append(f"rule:{rule['id']} +{rule['delta']}")
-                posterior += rule["delta"]
+
+        # 调用外部公共去重函数
+        hit_ids = filter_conflict_rules(hit_ids)
+
+        rule_map = {r["id"]: r for r in RULES}
+
+        for rid in hit_ids:
+            rule = rule_map[rid]
+            d = rule["desc"](vision, req) if callable(rule["desc"]) else rule["desc"]
+            s = rule["suggest"]
+            desc_items.append(d)
+            suggest_items.append(s)
+            trace.append(f"rule:{rid} +{rule['delta']}")
+            posterior += rule["delta"]
                 
         logger.info(f"[SleepEval] hit_ids={hit_ids}, desc_items={desc_items}, suggest_items={suggest_items}, posterior={posterior}")
         posterior = min(posterior, 0.95)
         evidence_count = len(hit_ids)
 
         riskLevel, riskClass = "低风险", "risk-low"
+        # 根据后验概率匹配风险等级
         for g in GRADE_MAP:
-            if evidence_count >= g["min_hit"]:
+            if posterior >= g["min_p"]:
                 riskLevel, riskClass = g["level"], g["cls"]
                 break
 
@@ -150,3 +194,8 @@ class SleepEnvService:
 
 
 sleep_env_service = SleepEnvService()
+
+
+
+
+
