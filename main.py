@@ -18,8 +18,8 @@ os.makedirs("./tmp", exist_ok=True)
 app = FastAPI(title="goodsleep_api", version="0.1.0")
 
 app.mount("/html_basic/static", StaticFiles(directory="html_basic/static"), name="static")
-app.include_router(logview_router, prefix="/logview")
-app.include_router(sleep_router, prefix="/vision")
+app.include_router(logview_router, prefix="")
+app.include_router(sleep_router, prefix="")
 
 
 @app.get("/", tags=["首页"])

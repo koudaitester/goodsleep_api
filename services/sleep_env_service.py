@@ -1,14 +1,152 @@
+# services/sleep_env_service.py
 from schemas.sleep import SleepEnvEvalReq, SleepEnvEvalResp
+from services.log_service import logger
+
+RULES = [
+    {
+        "id": "water_stain",
+        "test": lambda v, e: v and (("water stain" in v.mold_moisture) or ("water stain" in v.wall_ceiling) or ("mold" in v.mold_moisture) or ("damp" in v.mold_moisture)),
+        "desc": "墙面存在潮湿痕迹，霉菌风险上升",
+        "suggest": "及时处理墙面渗水，保持干燥通风",
+        "delta": 0.22
+    },
+    {
+        "id": "clutter",
+        "test": lambda v, e: v and ("disarray" in v.clutter_level or "scattered" in v.clutter_level or "cluttered" in v.clutter_level),
+        "desc": "床边物品杂乱，容易造成心理干扰",
+        "suggest": "收纳床边散落物品，简化卧室视觉负担",
+        "delta": 0.16
+    },
+    {
+        "id": "bedding_rumpled",
+        "test": lambda v, e: v and v.bedding_status == "rumpled",
+        "desc": "床品褶皱凌乱，不利于放松入睡",
+        "suggest": "整理床品，维持整洁的睡眠环境",
+        "delta": 0.10
+    },
+    {
+        "id": "vent_closed",
+        "test": lambda v, e: v and ("window closed" in v.vent_condition or "window is closed" in v.vent_condition),
+        "desc": "窗户关闭，室内空气流通偏弱",
+        "suggest": "定时开窗换气，改善室内空气质量",
+        "delta": 0.12
+    },
+    {
+        "id": "light_leak",
+        "test": lambda v, e: v and "light leakage" in v.window_curtain,
+        "desc": "窗帘遮光不足，光线容易干扰睡眠",
+        "suggest": "更换加厚遮光窗帘，减少夜间光线侵入",
+        "delta": 0.12
+    },
+    {
+        "id": "bed_blocked",
+        "test": lambda v, e: v and v.bed_occlusion != "未见",
+        "desc": "床体存在遮挡，不利于散热与空气流通",
+        "suggest": "移开遮挡物，保证床周边通畅",
+        "delta": 0.16
+    },
+    {
+        "id": "dust",
+        "test": lambda v, e: v and v.dust_accumulation != "未见",
+        "desc": "可见灰尘堆积，容易刺激呼吸道",
+        "suggest": "定期除尘，降低呼吸道刺激风险",
+        "delta": 0.10
+    },
+    {
+        "id": "electronics",
+        "test": lambda v, e: v and v.electronics in ("phone lamp", "phone", "lamp"),
+        "desc": "卧室存在电子设备，可能带来光照与干扰",
+        "suggest": "睡前远离手机，减少蓝光刺激",
+        "delta": 0.11
+    },
+    {
+        "id": "hum_high",
+        "test": lambda v, e: e.humidity is not None and e.humidity > 65,
+        "desc": "湿度过高，利于霉菌滋生",
+        "suggest": "开启除湿，湿度控制在40–60%区间",
+        "delta": 0.14
+    },
+    {
+        "id": "hum_low",
+        "test": lambda v, e: e.humidity is not None and e.humidity < 35,
+        "desc": "湿度偏低，容易咽干不适",
+        "suggest": "适度加湿",
+        "delta": 0.08
+    },
+    {
+        "id": "temp_bad",
+        "test": lambda v, e: e.temperature is not None and (e.temperature < 16 or e.temperature > 24),
+        "desc": "温度偏离舒适睡眠区间",
+        "suggest": "调整室温至18–22℃",
+        "delta": 0.10
+    },
+    {
+        "id": "mold_risk_high",
+        "test": lambda v, e: e.mold_risk_level in ("中等", "高"),
+        "desc": lambda v, e: f"霉菌评估风险：{e.mold_risk_level}",
+        "suggest": "重点排查潮湿源，除霉通风",
+        "delta": 0.25
+    }
+]
+
+GRADE_MAP = [
+    {"min_hit": 3, "level": "高风险", "cls": "risk-high"},
+    {"min_hit": 1, "level": "中等风险", "cls": "risk-medium"},
+    {"min_hit": 0, "level": "低风险", "cls": "risk-low"},
+]
+
 
 class SleepEnvService:
-    @staticmethod
-    def evaluate(req: SleepEnvEvalReq) -> SleepEnvEvalResp:
-        # 先返回mock数据，链路通了再塞打分+贝叶斯逻辑
+    async def evaluate(self, req: SleepEnvEvalReq) -> SleepEnvEvalResp:
+        vision = req.vision_obs
+        logger.info(f"[SleepEval] temp={req.temperature}, hum={req.humidity}, period={req.time_period}, mold={req.mold_risk_level}")
+        if vision:
+            logger.info(f"[SleepEval] vision_obs={vision.model_dump(by_alias=True)}")
+
+        hit_ids = []
+        desc_items = []
+        suggest_items = []
+        trace = []
+        posterior = 0.0
+
+        for rule in RULES:
+            if rule["test"](vision, req):
+                hit_ids.append(rule["id"])
+                d = rule["desc"](vision, req) if callable(rule["desc"]) else rule["desc"]
+                s = rule["suggest"]
+                desc_items.append(d)
+                suggest_items.append(s)
+                trace.append(f"rule:{rule['id']} +{rule['delta']}")
+                posterior += rule["delta"]
+                
+        logger.info(f"[SleepEval] hit_ids={hit_ids}, desc_items={desc_items}, suggest_items={suggest_items}, posterior={posterior}")
+        posterior = min(posterior, 0.95)
+        evidence_count = len(hit_ids)
+
+        riskLevel, riskClass = "低风险", "risk-low"
+        for g in GRADE_MAP:
+            if evidence_count >= g["min_hit"]:
+                riskLevel, riskClass = g["level"], g["cls"]
+                break
+
+        desc_str = "；".join(desc_items) if desc_items else "综合评估结果：低风险"
+        suggest_str = "；".join(suggest_items) if suggest_items else "卧室环境条件良好，保持现有通风与温湿度即可。"
+        logger.info(f"[SleepEval] riskLevel={riskLevel}, riskClass={riskClass}, posterior={posterior}, trace={trace}, evidence_count={evidence_count}")
+        raw_text = vision.raw_text if vision else ""
+        extraNote = f"{raw_text}" if raw_text else "单环境评估，无异常风险"
+        
         return SleepEnvEvalResp(
-            riskLevel="低风险",
-            riskClass="risk-low",
-            desc="综合评估结果：低风险",
-            suggest="卧室环境条件良好，保持现有通风与温湿度即可。",
-            extraNote="单环境评估，无异常风险",
-            bayes={"posterior":0.0, "trace":[], "evidence_count":0}
+            riskLevel=riskLevel,
+            riskClass=riskClass,
+            desc=desc_str,
+            suggest=suggest_str,
+            extraNote=extraNote,
+            bayes={
+                "posterior": round(posterior, 2),
+                "trace": trace,
+                "evidence_count": evidence_count
+            }
         )
+
+
+sleep_env_service = SleepEnvService()
