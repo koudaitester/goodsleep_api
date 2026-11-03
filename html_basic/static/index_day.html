@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>EnvAI 控制台</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{display:flex;height:100vh;overflow:hidden;background:#f7f8fa;color:#333}
+
+.sidebar{
+    width:240px;
+    background:#eef1f6;
+    color:#1f2937;
+    transition:width 0.3s ease;
+    overflow:hidden;
+    box-shadow: 1px 0 8px rgba(0,0,0,0.06);
+}
+.sidebar.collapse{width:54px}
+
+.hamburger{
+    height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+    cursor:pointer;
+    border-bottom:1px solid #d8dee7;
+    user-select:none;
+    color:#374151;
+}
+.hamburger:hover{background:#e3e8f0}
+
+.menu-item{
+    height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    border-bottom:1px solid #e3e8f0;
+    transition:background 0.2s ease, color 0.2s ease;
+    user-select:none;
+    color:#1f2937;
+    position:relative;
+}
+.menu-item:hover{background:#dfe6f1;color:#0b57d0}
+/* 激活标记：左侧蓝竖线 */
+.menu-item.active::before{
+    content:"";
+    position:absolute;
+    left:0;
+    top:12px;
+    bottom:12px;
+    width:3px;
+    background:#0b57d0;
+}
+
+.short{display:inline;}
+.full{display:none;white-space:nowrap}
+.sidebar:not(.collapse) .short{display:none;}
+.sidebar:not(.collapse) .full{display:inline;}
+
+.main{flex:1;overflow:hidden}
+iframe{
+    width:100%;
+    height:100%;
+    border:none;
+    background:#fff;
+}
+</style>
+</head>
+<body>
+<div class="sidebar" id="side">
+    <div class="hamburger" onclick="toggleSide()">☰</div>
+    <div class="menu-item active" data-url="sleep_eval.html" onclick="switchPage('sleep_eval.html', this)">
+        <span class="short">图</span>
+        <span class="full">用图片识别</span>
+    </div>
+    <div class="menu-item" data-url="video_stream.html" onclick="switchPage('video_stream.html', this)">
+        <span class="short">视</span>
+        <span class="full">视频识别</span>
+    </div>
+</div>
+<div class="main">
+    <iframe id="frame" src="sleep_eval.html"></iframe>
+</div>
+<script>
+// 读取本地存储，恢复侧边状态
+const side = document.getElementById('side');
+if(localStorage.getItem('sidebarState') === 'collapse'){
+    side.classList.add('collapse');
+}
+
+function toggleSide(){
+    side.classList.toggle('collapse');
+    localStorage.setItem('sidebarState', side.classList.contains('collapse') ? 'collapse' : 'open');
+}
+
+function switchPage(url, el){
+    document.getElementById('frame').src = url;
+    // 清除所有激活，给当前加上active
+    document.querySelectorAll('.menu-item').forEach(item=>item.classList.remove('active'))
+    el.classList.add('active')
+}
+</script>
+</body>
+</html>

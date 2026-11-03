@@ -23,24 +23,25 @@ class SleepVisionObservation(BaseModel):
     wall_ceiling: str
     odor_cue: str
     space_type: str
-    infer_cost_sec: float
-    raw_text: str = Field(..., alias="__raw_text__")
-    
+    __raw_text__: str
+    infer_cost_sec: Optional[float] = None  # 改成可选
+
     class Config:
         extra = "ignore"
 
 class SleepEnvEvalReq(BaseModel):
     temperature: Optional[float] = None
     humidity: Optional[float] = None
-    co2: Optional[int] = None
+    co2: Optional[float] = None
     noise: Optional[float] = None
     illuminance: Optional[float] = None
-    time_period: str = Field(..., description="时段：bedtime / midnight / dawn")
-    mold_risk_level: Optional[str] = None # 复用霉菌模块输出：低/初级/中/高
-    # 新增：视觉观测证据包，可选，类型就是上面的SleepVisionObservation
+    sleep_start_hour: Optional[int] = None
+    mold_risk_level: Optional[str] = None
     vision_obs: Optional[SleepVisionObservation] = None
 
+# 配置类，用于定义配置项
     class Config:
+    # 忽略额外的字段，只处理已定义的字段
         extra = "ignore"
 
 class SleepEnvEvalResp(BaseModel):

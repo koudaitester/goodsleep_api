@@ -2,196 +2,77 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>GoodSleep 睡眠环境评估</title>
+<title>EnvAI 控制台</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui, -apple-system, BlinkMacSystemFont, sans-serif}
-body{background:#f0f4f9;padding:24px;color:#222;line-height:1.65}
-.page-title{font-size:24px;font-weight:500;margin-bottom:6px;color:#1f2937}
-.page-subtitle{font-size:15px;color:#64748b;margin-bottom:28px}
-.wrap{display:grid;grid-template-columns: 1fr 1fr;gap:24px;max-width:1400px}
-.card{background:#ffffff;border-radius:14px;padding:24px;box-shadow:0 1px 6px rgba(0,0,0,0.07)}
-/* 上传拖拽区域 */
-.upload-area{border:1px dashed #b8c2d4;border-radius:10px;padding:16px;text-align:center;cursor:pointer;margin-bottom:16px;min-height:220px;display:flex;align-items:center;justify-content:center}
-.upload-area p{color:#64748b}
-.upload-area.active{border-color:#2563eb;background:#eff6ff}
-.upload-area img{max-width:100%;max-height:260px;border-radius:8px;display:block}
-.param-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
-.param-item label{display:block;font-size:14px;color:#475569;margin-bottom:4px}
-.param-item input,.param-item select{width:100%;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
-.tip-text{font-size:13px;color:#64748b;margin:8px 0 20px}
-#runAll{width:100%;padding:12px 0;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:16px;cursor:pointer}
-#runAll:hover{background:#1d4ed8}
-#runAll:disabled{background:#94a3b8;cursor:not-allowed}
-#msg{margin:12px 0;font-size:14px;min-height:20px}
-.info{color:#2563eb}
-.error{color:#dc2626}
-.success{color:#10b981}
-/* 右侧结果卡片 */
-.risk-tag{display:inline-block;padding:4px 10px;border-radius:999px;color:#fff;font-size:14px;font-weight:500;margin-bottom:14px}
-.risk-low{background:#10b981}
-.risk-medium{background:#f59e0b}
-.risk-high{background:#dc2626}
-.risk-none{background:#9ca3af}
-.result-title{font-size:16px;font-weight:500;margin-bottom:6px}
-.result-block{margin-bottom:12px}
-.trace-block{background:#f1f5f9;padding:12px;border-radius:8px;font-size:13px;color:#64748b;margin:14px 0}
-.raw-toggle{font-size:13px;color:#2563eb;cursor:pointer;margin:10px 0;display:inline-block}
-.raw-box{display:none;background:#f1f5f9;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;max-height:220px;overflow:auto;color:#555}
-.raw-box.show{display:block}
-.footer-note{grid-column:1/-1;margin-top:16px;font-size:13px;color:#ca8a04}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{display:flex;height:100vh;overflow:hidden;background:#f7f8fa;color:#333}
+/* 侧边栏 */
+.sidebar{
+    width:240px;
+    background:linear-gradient(180deg, #2b303b 0%, #1f232b 100%);
+    color:#fff;
+    transition:width 0.3s ease;
+    overflow:hidden;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.12);
+}
+.sidebar.collapse{width:54px}
+/* 汉堡头部 */
+.hamburger{
+    height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+    cursor:pointer;
+    border-bottom:1px solid #3c424f;
+    user-select:none;
+}
+.hamburger:hover{background:rgba(255,255,255,0.08)}
+/* 菜单项 */
+.menu-item{
+    height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    border-bottom:1px solid #343944;
+    transition:background 0.2s ease;
+    user-select:none;
+}
+.menu-item:hover{background:rgba(255,255,255,0.08)}
+.short{display:inline;}
+.full{display:none;white-space:nowrap}
+/* 展开状态切换文字 */
+.sidebar:not(.collapse) .short{display:none;}
+.sidebar:not(.collapse) .full{display:inline;}
+
+/* 主内容区 */
+.main{flex:1;overflow:hidden}
+iframe{width:100%;height:100%;border:none;background:#fff;}
 </style>
 </head>
 <body>
-<div class="page-title">GoodSleep 睡眠环境评估</div>
-<div class="page-subtitle">卧室人居环境视觉 + 贝叶斯风险评估（本地AI推理）</div>
-<div class="wrap">
-  <!-- 左侧：上传和参数 -->
-  <div class="card">
-    <div class="upload-area" id="uploadBox">
-      <p id="uploadTip">点击或者拖拽图片到此处上传</p>
-      <input type="file" id="imgFile" accept="image/*" hidden>
+<div class="sidebar collapse" id="side">
+    <div class="hamburger" onclick="toggleSide()">☰</div>
+    <div class="menu-item" onclick="switchPage('sleep_eval.html')">
+        <span class="short">图</span>
+        <span class="full">用图片识别</span>
     </div>
-    <div class="param-row">
-      <div class="param-item">
-        <label>温度 ℃</label>
-        <input id="temp" type="number" value="18" placeholder="例：20">
-      </div>
-      <div class="param-item">
-        <label>相对湿度 RH %</label>
-        <input id="hum" type="number" value="50" placeholder="例：55">
-      </div>
+    <div class="menu-item" onclick="switchPage('video_stream.html')">
+        <span class="short">视</span>
+        <span class="full">视频识别</span>
     </div>
-    <div class="param-item">
-      <label>睡眠时段</label>
-      <select id="period">
-        <option value="bedtime" selected>入睡时段 bedtime</option>
-        <option value="midnight">午夜 midnight</option>
-        <option value="dawn">凌晨 dawn</option>
-      </select>
-    </div>
-    <div class="tip-text">参数全部填写，启用图像+环境联合评估；留空仅图像推理</div>
-    <button id="runAll">一键评估</button>
-    <div id="msg"></div>
-  </div>
-
-  <!-- 右侧：结果面板 -->
-  <div class="card" id="resultCard">
-    <div style="color:#94a3b8">评估结果将在这里展示</div>
-  </div>
 </div>
-<div class="footer-note">⚠️ 提示：本系统仅作为人居环境辅助评估，不能替代专业环境检测</div>
-
+<div class="main">
+    <iframe id="frame" src="sleep_eval.html"></iframe>
+</div>
 <script>
-const VISION_API = "http://127.0.0.1:8000/api/v1/sleep/vision";
-const EVAL_API = "http://127.0.0.1:8000/api/v1/sleep/eval";
-
-const imgFile = document.getElementById("imgFile");
-const uploadBox = document.getElementById("uploadBox");
-const uploadTip = document.getElementById("uploadTip");
-const tempEl = document.getElementById("temp");
-const humEl = document.getElementById("hum");
-const periodEl = document.getElementById("period");
-const runBtn = document.getElementById("runAll");
-const msgBox = document.getElementById("msg");
-const resultCard = document.getElementById("resultCard");
-
-// 拖拽上传
-uploadBox.onclick = ()=>imgFile.click();
-uploadBox.ondragover = e=>{e.preventDefault();uploadBox.classList.add("active")};
-uploadBox.ondragleave = ()=>uploadBox.classList.remove("active");
-uploadBox.ondrop = e=>{
-  e.preventDefault();
-  uploadBox.classList.remove("active");
-  if(e.dataTransfer.files[0]) imgFile.files = e.dataTransfer.files;
-  imgFile.onchange();
+function toggleSide(){
+    const s = document.getElementById('side')
+    s.classList.toggle('collapse')
 }
-
-imgFile.onchange = ()=>{
-  const f = imgFile.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = e=>{
-    uploadTip.style.display = "none";
-    uploadBox.innerHTML = `<img src="${e.target.result}" alt="预览">`;
-  }
-  r.readAsDataURL(f);
-}
-function setMsg(text,cls="info"){
-  msgBox.textContent = text;
-  msgBox.className = cls;
-}
-function renderResult(res){
-  resultCard.innerHTML = `
-    <div class="risk-tag ${res.riskClass}">${res.riskLevel}</div>
-    <div class="result-block">
-      <div class="result-title">风险描述</div>
-      <div>${res.desc}</div>
-    </div>
-    <div class="result-block">
-      <div class="result-title">整改建议</div>
-      <div style="color:#2563eb">${res.suggest}</div>
-    </div>
-    <div class="trace-block">
-      贝叶斯后验概率：${res.bayes.posterior}<br/>
-      推理链路：${res.bayes.trace.join("；")}<br/>
-      证据数量：${res.bayes.evidence_count}
-    </div>
-    <div class="raw-toggle" id="rawToggle">展开原始返回</div>
-    <div class="raw-box" id="rawContent">${JSON.stringify(res,null,2)}</div>
-  `;
-  document.getElementById("rawToggle").onclick = function(){
-    const rawDom = document.getElementById("rawContent");
-    rawDom.classList.toggle("show");
-    this.innerText = rawDom.classList.contains("show") ? "收起原始返回" : "展开原始返回";
-  }
-}
-
-runBtn.onclick = async ()=>{
-  const file = imgFile.files[0];
-  if(!file){
-    setMsg("请先选择图片","error");
-    return;
-  }
-  runBtn.disabled = true;
-  setMsg("正在调用视觉识别...");
-  try{
-    const fd = new FormData();
-    fd.append("img_file",file);
-    fd.append("temperature",tempEl.value);
-    fd.append("humidity",humEl.value);
-    const vRes = await fetch(VISION_API,{method:"POST",body:fd});
-    const vJson = await vRes.json();
-    if(!vRes.ok) throw new Error("Vision失败："+JSON.stringify(vJson));
-    const visionData = vJson.data;
-    if(visionData.raw_text !== undefined){
-      visionData.__raw_text__ = visionData.raw_text;
-      delete visionData.raw_text;
-    }
-    setMsg("视觉解析完成，正在评估睡眠环境...");
-    const payload = {
-      temperature: tempEl.value.trim() ? Number(tempEl.value) : null,
-      humidity: humEl.value.trim() ? Number(humEl.value) : null,
-      co2: null,
-      noise: null,
-      illuminance: null,
-      time_period: periodEl.value,
-      mold_risk_level: null,
-      vision_obs: visionData
-    };
-    const eResp = await fetch(EVAL_API,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(payload)
-    });
-    const eJson = await eResp.json();
-    if(!eResp.ok) throw new Error("Eval失败："+JSON.stringify(eJson));
-    setMsg("评估完成","success");
-    renderResult(eJson);
-  }catch(e){
-    setMsg(e.message,"error");
-  }finally{
-    runBtn.disabled = false;
-  }
+function switchPage(url){
+    document.getElementById('frame').src = url
 }
 </script>
 </body>

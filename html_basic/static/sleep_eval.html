@@ -68,12 +68,17 @@ body{background:#f0f4f9;padding:24px;color:#222;line-height:1.65}
     </div>
     <div class="param-item">
       <label>睡眠时段</label>
-      <select id="period">
-        <option value="bedtime" selected>入睡时段 bedtime</option>
-        <option value="midnight">午夜 midnight</option>
-        <option value="dawn">凌晨 dawn</option>
-      </select>
+        <select id="sleep_start_hour">
+          <option value="21">21:00</option>
+          <option value="22">22:00</option>
+          <option value="23" selected>23:00</option>
+          <option value="0">00:00</option>
+          <option value="1">01:00</option>
+          <option value="2">02:00</option>
+          <option value="3">03:00</option>
+        </select>
     </div>
+
     <div class="tip-text">参数全部填写，启用图像+环境联合评估；留空仅图像推理</div>
     <button id="runAll">一键评估</button>
     <div id="msg"></div>
@@ -95,7 +100,7 @@ const uploadBox = document.getElementById("uploadBox");
 const uploadTip = document.getElementById("uploadTip");
 const tempEl = document.getElementById("temp");
 const humEl = document.getElementById("hum");
-const periodEl = document.getElementById("period");
+const sleepStartHourEl = document.getElementById("sleep_start_hour");
 const runBtn = document.getElementById("runAll");
 const msgBox = document.getElementById("msg");
 const resultCard = document.getElementById("resultCard");
@@ -143,7 +148,6 @@ function renderResult(res){
       <div style="color:#2563eb">${res.suggest}</div>
     </div>
     <div class="trace-block">
-      视觉推理耗时：${res.vision_obs.infer_cost_sec}s<br/>
       贝叶斯后验概率：${res.bayes.posterior}<br/>
       推理链路：${res.bayes.trace.join("；")}<br/>
       证据数量：${res.bayes.evidence_count}
@@ -187,10 +191,12 @@ runBtn.onclick = async ()=>{
       co2: null,
       noise: null,
       illuminance: null,
-      time_period: periodEl.value,
+      sleep_start_hour: sleepStartHourEl.value.trim(),
       mold_risk_level: null,
       vision_obs: visionData
     };
+    console.log("payload ===> ", payload)
+
     const eResp = await fetch(EVAL_API,{
       method:"POST",
       headers:{"Content-Type":"application/json"},

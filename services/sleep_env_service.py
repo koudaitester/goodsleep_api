@@ -107,8 +107,36 @@ RULES = [
         "desc": lambda v, e: f"霉菌评估风险：{e.mold_risk_level}",
         "suggest": "重点排查潮湿源，除霉通风",
         "delta": 0.25
+    },
+    {
+        "id": "sleep_late_00",
+        "test": lambda v, e: e.sleep_start_hour == 0,
+        "desc": "零点入睡，偏离推荐睡眠时段",
+        "suggest": "尽量提前至23点前入睡",
+        "delta": 0.08
+    },
+    {
+        "id": "sleep_late_01",
+        "test": lambda v, e: e.sleep_start_hour == 1,
+        "desc": "凌晨1点入睡，入睡时间偏晚",
+        "suggest": "调整作息，尽量23点前上床休息",
+        "delta": 0.12
+    },
+    {
+        "id": "sleep_late_02",
+        "test": lambda v, e: e.sleep_start_hour == 2,
+        "desc": "凌晨2点入睡，作息严重延后",
+        "suggest": "逐步提前入睡时间，修复睡眠节律",
+        "delta": 0.16
+    },
+    {
+        "id": "sleep_late_03",
+        "test": lambda v, e: e.sleep_start_hour == 3,
+        "desc": "凌晨3点入睡，节律紊乱风险高",
+        "suggest": "尽快调整作息，避免长期熬夜",
+        "delta": 0.20
     }
-    
+
 ]
 
 GRADE_MAP = [
@@ -134,7 +162,7 @@ def filter_conflict_rules(hit_rule_ids: list[str]) -> list[str]:
 class SleepEnvService:
     async def evaluate(self, req: SleepEnvEvalReq) -> SleepEnvEvalResp:
         vision = req.vision_obs
-        logger.info(f"[SleepEval] temp={req.temperature}, hum={req.humidity}, period={req.time_period}, mold={req.mold_risk_level}")
+        logger.info(f"[SleepEval] temp={req.temperature}, hum={req.humidity}, sleep_start_hour={req.sleep_start_hour}, mold={req.mold_risk_level}")
         if vision:
             logger.info(f"[SleepEval] vision_obs={vision.model_dump(by_alias=True)}")
 
@@ -176,7 +204,7 @@ class SleepEnvService:
         desc_str = "；".join(desc_items) if desc_items else "综合评估结果：低风险"
         suggest_str = "；".join(suggest_items) if suggest_items else "卧室环境条件良好，保持现有通风与温湿度即可。"
         logger.info(f"[SleepEval] riskLevel={riskLevel}, riskClass={riskClass}, posterior={posterior}, trace={trace}, evidence_count={evidence_count}")
-        raw_text = vision.raw_text if vision else ""
+        raw_text = vision.model_dump().get("__raw_text__", "") if vision else ""
         extraNote = f"{raw_text}" if raw_text else "单环境评估，无异常风险"
         
         return SleepEnvEvalResp(

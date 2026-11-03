@@ -33,5 +33,6 @@ async def sleep_vision(
 
 @router.post("/eval", response_model=SleepEnvEvalResp)
 async def sleep_eval(req: SleepEnvEvalReq):
+    logger.info(f"[SleepEval] Received request: {req.json()}")
     return await sleep_env_service.evaluate(req)
 
