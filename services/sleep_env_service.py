@@ -1,6 +1,34 @@
 # services/sleep_env_service.py
 from schemas.sleep import SleepEnvEvalReq, SleepEnvEvalResp
 from services.log_service import logger
+from fastapi import HTTPException
+from utils.common import bayes_two_pair
+
+# ========== 湿度-霉菌 贝叶斯配置（写在RULES上方） ==========
+BAYES_RH_MOLD_CONF = {
+        "prior_h": 0.10,
+        "p_x_given_h": {          # P(RH|风险H)
+            "high": 0.60,
+            "normal": 0.30
+        },
+        "p_x_given_not_h": {      # P(RH|无风险¬H)
+            "high": 0.20,
+            "normal": 0.75
+        },
+        "p_y_given_h_x": {        # P(M | H, RH)
+            ("high", "yes"): 0.90,
+            ("high", "no"): 0.10,
+            ("normal", "yes"): 0.40,
+            ("normal", "no"): 0.60,
+        },
+        "p_y_given_not_h_x": {    # P(M | ¬H, RH)
+            ("high", "yes"): 0.30,
+            ("high", "no"): 0.70,
+            ("normal", "yes"): 0.08,
+            ("normal", "no"): 0.92,
+        },
+        "scale": 0.22
+    }
 
 RULES = [
     {
@@ -17,13 +45,13 @@ RULES = [
         "suggest": "调高室温至20–25℃",
         "delta": 0.10
     },
-    {
-        "id": "hum_high",
-        "test": lambda v, e: e.humidity is not None and e.humidity > 55,
-        "desc": "湿度过高，利于霉菌滋生",
-        "suggest": "开启除湿，湿度控制在45–55%区间",
-        "delta": 0.15
-    },
+    # {
+    #     "id": "hum_high",
+    #     "test": lambda v, e: e.humidity is not None and e.humidity > 55,
+    #     "desc": "湿度过高，利于霉菌滋生",
+    #     "suggest": "开启除湿，湿度控制在45–55%区间",
+    #     "delta": 0.15
+    # },
     {
         "id": "hum_low",
         "test": lambda v, e: e.humidity is not None and e.humidity < 45,
@@ -38,20 +66,20 @@ RULES = [
         "suggest": "及时擦干水渍，保持墙面干燥，定期观察是否长出霉菌",
         "delta": 0.10
     },
-    {
-        "id": "mold_exist",
-        "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture),
-        "desc": "墙面识别出霉菌/潮湿痕迹，存在霉菌暴露风险",
-        "suggest": "尽快清理霉菌，排查渗水源头，加强通风除湿",
-        "delta": 0.12
-    },
-    {
-        "id": "mold_grow_risk",
-        "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture) and e.humidity is not None and e.humidity > 55,
-        "desc": "存在霉菌痕迹且湿度过高，环境适合霉菌孢子持续增殖",
-        "suggest": "立即开启除湿设备，把湿度降到55%以下，配合开窗通风",
-        "delta": 0.20
-    },
+    # {
+    #     "id": "mold_exist",
+    #     "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture),
+    #     "desc": "墙面识别出霉菌/潮湿痕迹，存在霉菌暴露风险",
+    #     "suggest": "尽快清理霉菌，排查渗水源头，加强通风除湿",
+    #     "delta": 0.12
+    # },
+    # {
+    #     "id": "mold_grow_risk",
+    #     "test": lambda v, e: v and ("mold" in v.mold_moisture or "damp" in v.mold_moisture) and e.humidity is not None and e.humidity > 55,
+    #     "desc": "存在霉菌痕迹且湿度过高，环境适合霉菌孢子持续增殖",
+    #     "suggest": "立即开启除湿设备，把湿度降到55%以下，配合开窗通风",
+    #     "delta": 0.20
+    # },
     {
         "id": "clutter",
         "test": lambda v, e: v and ("disarray" in v.clutter_level or "scattered" in v.clutter_level or "cluttered" in v.clutter_level),
@@ -191,8 +219,43 @@ class SleepEnvService:
             posterior += rule["delta"]
                 
         logger.info(f"[SleepEval] hit_ids={hit_ids}, desc_items={desc_items}, suggest_items={suggest_items}, posterior={posterior}")
+
+        # 湿度-霉菌 贝叶斯计算
+        if req.humidity is not None and req.humidity > 55:
+            rh_state = "high"
+        else:
+            rh_state = "normal"
+        # 编码霉菌状态
+        m_state = "no"
+        if vision and vision.mold_moisture:
+            if "mold" in vision.mold_moisture or "damp" in vision.mold_moisture:
+                m_state = "yes"
+            else:
+                m_state = "no"
+
+        post_rh_mold, add_rh_mold = bayes_two_pair(
+            prior_h=BAYES_RH_MOLD_CONF["prior_h"],
+            p_x_given_h=BAYES_RH_MOLD_CONF["p_x_given_h"],
+            p_y_given_h_x=BAYES_RH_MOLD_CONF["p_y_given_h_x"],
+            x_state=rh_state,
+            y_state=m_state,
+            p_x_given_not_h=BAYES_RH_MOLD_CONF["p_x_given_not_h"],
+            p_y_given_not_h_x=BAYES_RH_MOLD_CONF["p_y_given_not_h_x"],
+            scale=BAYES_RH_MOLD_CONF["scale"]
+        )
+        trace.append(f"bayes:rh-mold | post={post_rh_mold:.4f} +{add_rh_mold:.4f}")
+        posterior += add_rh_mold
+
+        # 业务兜底：高湿+霉菌保底增量0.20
+        if rh_state == "high" and m_state == "yes":
+            if add_rh_mold < 0.20:
+                trace.append(f"bayes:rh-mold safeguard, override +0.20")
+                posterior -= add_rh_mold
+                add_rh_mold = 0.20
+                posterior += add_rh_mold
+
         posterior = min(posterior, 0.95)
-        evidence_count = len(hit_ids)
+        evidence_count = len(hit_ids) + 1
 
         riskLevel, riskClass = "低风险", "risk-low"
         # 根据后验概率匹配风险等级
@@ -205,6 +268,11 @@ class SleepEnvService:
         suggest_str = "；".join(suggest_items) if suggest_items else "卧室环境条件良好，保持现有通风与温湿度即可。"
         logger.info(f"[SleepEval] riskLevel={riskLevel}, riskClass={riskClass}, posterior={posterior}, trace={trace}, evidence_count={evidence_count}")
         raw_text = vision.model_dump().get("__raw_text__", "") if vision else ""
+        space_type = vision.model_dump().get("space_type", "") if vision else ""
+        # 如果提供了视觉分析结果，但原始文本中没有提到“bedroom”，则提示用户提供正确的卧室图片
+        if space_type and "卧室" != space_type.lower():
+            logger.warning(f"[sleep_env_service] Detected space_type is not bedroom: {space_type}. Please provide a bedroom image for evaluation.")
+            raise HTTPException(status_code=400, detail="识别非卧室场景，请上传卧室照片进行评估")
         extraNote = f"{raw_text}" if raw_text else "单环境评估，无异常风险"
         
         return SleepEnvEvalResp(

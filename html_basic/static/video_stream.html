@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>GoodSleep 摄像头实时评估</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui,sans-serif}
+body{background:#f0f4f9;padding:24px;color:#222;line-height:1.65}
+.page-title{font-size:24px;font-weight:500;margin-bottom:6px;color:#1f2937}
+.page-subtitle{font-size:15px;color:#64748b;margin-bottom:28px}
+.wrap{display:grid;grid-template-columns: 1fr 1fr;gap:24px;max-width:1400px}
+.card{background:#ffffff;border-radius:14px;padding:24px;box-shadow:0 1px 6px rgba(0,0,0,0.07)}
+video, canvas{width:100%;border:1px solid #cbd5e1;border-radius:10px;background:#000}
+.param-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+.param-item label{display:block;font-size:14px;color:#475569;margin-bottom:4px}
+.param-item input,.param-item select{width:100%;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+.tip-text{font-size:13px;color:#64748b;margin:8px 0 20px}
+#startBtn,#stopBtn{padding:10px 14px;border:none;border-radius:8px;margin-right:8px;cursor:pointer;font-size:14px}
+#startBtn{background:#2563eb;color:#fff}
+#stopBtn{background:#94a3b8;color:#fff}
+button:disabled{opacity:0.6;cursor:not-allowed}
+#msg{margin:12px 0;font-size:14px;min-height:20px}
+.info{color:#2563eb}
+.error{color:#dc2626}
+.success{color:#10b981}
+.risk-tag{display:inline-block;padding:4px 10px;border-radius:999px;color:#fff;font-size:14px;font-weight:500;margin-bottom:6px}
+.risk-low{background:#10b981}
+.risk-medium{background:#f59e0b}
+.risk-high{background:#dc2626}
+.risk-none{background:#9ca3af}
+.risk-sub{font-size:14px;color:#64748b;margin-bottom:14px}
+.result-title{font-size:16px;font-weight:500;margin-bottom:6px}
+.result-block{margin-bottom:12px}
+.trace-block{background:#f1f5f9;padding:12px;border-radius:8px;font-size:13px;color:#64748b;margin:14px 0}
+.raw-toggle{font-size:13px;color:#2563eb;cursor:pointer;margin:10px 0;display:inline-block}
+.raw-box{display:none;background:#f1f5f9;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;max-height:220px;overflow:auto;color:#555}
+.raw-box.show{display:block}
+</style>
+</head>
+<body>
+<div class="page-title">GoodSleep 摄像头实时评估</div>
+<div class="page-subtitle">摄像头截帧，复用视觉+贝叶斯评估链路</div>
+<div class="wrap">
+<div class="card">
+    <h4>摄像头预览</h4>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none"></canvas>
+    <div style="margin:14px 0">
+        <button id="startBtn">开启摄像头 & 自动评估</button>
+        <button id="stopBtn" disabled>停止</button>
+    </div>
+    <div class="tip-text">采集间隔：3秒一帧</div>
+    <div class="param-row">
+        <div class="param-item">
+            <label>温度 ℃</label>
+            <input id="temp" type="number" value="18" placeholder="例：20">
+        </div>
+        <div class="param-item">
+            <label>相对湿度 RH %</label>
+            <input id="hum" type="number" value="50" placeholder="例：55">
+        </div>
+    </div>
+    <div class="param-item">
+        <label>睡眠起始小时</label>
+        <select id="sleep_start_hour">
+            <option value="21">21:00</option>
+            <option value="22">22:00</option>
+            <option value="23" selected>23:00</option>
+            <option value="0">00:00</option>
+            <option value="1">01:00</option>
+            <option value="2">02:00</option>
+            <option value="3">03:00</option>
+        </select>
+    </div>
+    <div id="msg"></div>
+</div>
+<div class="card" id="resultCard">
+    <div style="color:#94a3b8">评估结果将在这里展示</div>
+</div>
+</div>
+
+<script>
+const VISION_API = "http://127.0.0.1:8000/api/v1/sleep/vision";
+const EVAL_API = "http://127.0.0.1:8000/api/v1/sleep/eval";
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const tempEl = document.getElementById("temp");
+const humEl = document.getElementById("hum");
+const hourEl = document.getElementById("sleep_start_hour");
+const msgBox = document.getElementById("msg");
+const resultCard = document.getElementById("resultCard");
+
+let stream = null;
+let timerId = null;
+const captureInterval = 5000;
+
+function setMsg(text,cls="info"){
+    msgBox.textContent = text;
+    msgBox.className = cls;
+}
+function renderResult(res){
+    resultCard.innerHTML = `
+        <div class="risk-tag ${res.riskClass}">${res.riskLevel}</div>
+        <div class="risk-sub">综合评估结果：${res.riskLevel}</div>
+        <div class="result-block">
+          <div class="result-title">风险描述</div>
+          <div>${res.desc}</div>
+        </div>
+        <div class="result-block">
+          <div class="result-title">整改建议</div>
+          <div style="color:#2563eb">${res.suggest}</div>
+        </div>
+        <div class="trace-block">
+          风险评分：${res.bayes.posterior}<br/>
+          推理链路：${res.bayes.trace.join("；")}<br/>
+          证据数量：${res.bayes.evidence_count}
+        </div>
+        <div class="raw-toggle" id="rawToggle">展开原始返回</div>
+        <div class="raw-box" id="rawContent">${JSON.stringify(res,null,2)}</div>
+    `;
+    document.getElementById("rawToggle").onclick = function(){
+        const rawDom = document.getElementById("rawContent");
+        rawDom.classList.toggle("show");
+        this.innerText = rawDom.classList.contains("show") ? "收起原始返回" : "展开原始返回";
+    }
+}
+
+// canvas 转 blob，FormData上传，和图片页面逻辑对齐
+async function captureAndSendVision(){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video,0,0);
+    return new Promise((resolve)=>{
+        canvas.toBlob(async (blob)=>{
+            const fd = new FormData();
+            fd.append("img_file", blob, "frame.jpg");
+            fd.append("temperature", tempEl.value);
+            fd.append("humidity", humEl.value);
+            const vRes = await fetch(VISION_API,{method:"POST",body:fd});
+            const vJson = await vRes.json();
+            resolve({ok:vRes.ok, data:vJson});
+        }, "image/jpeg", 0.85);
+    })
+}
+
+async function runEvalChain(){
+    setMsg("正在截帧调用视觉识别...");
+    const visionRet = await captureAndSendVision();
+    if(!visionRet.ok){
+        setMsg("Vision报错："+JSON.stringify(visionRet.data),"error");
+        return;
+    }
+    const visionData = visionRet.data.data;
+    if(visionData.raw_text !== undefined){
+        visionData.__raw_text__ = visionData.raw_text;
+        delete visionData.raw_text;
+    }
+    setMsg("视觉解析完成，正在评估睡眠环境...");
+    const payload = {
+        temperature: tempEl.value.trim() ? Number(tempEl.value) : null,
+        humidity: humEl.value.trim() ? Number(humEl.value) : null,
+        co2: null,
+        noise: null,
+        illuminance: null,
+        sleep_start_hour: hourEl.value.trim(),
+        mold_risk_level: null,
+        vision_obs: visionData
+    };
+    const eResp = await fetch(EVAL_API,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+    });
+    const eJson = await eResp.json();
+    if(!eResp.ok){
+        setMsg("Eval报错："+JSON.stringify(eJson),"error");
+        return;
+    }
+    setMsg("评估完成","success");
+    renderResult(eJson);
+}
+
+startBtn.onclick = async ()=>{
+    try{
+        stream = await navigator.mediaDevices.getUserMedia({video:true});
+        video.srcObject = stream;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        setMsg("摄像头已开启，等待首次评估...");
+        setTimeout(runEvalChain, 800);
+        timerId = setInterval(runEvalChain, captureInterval);
+    }catch(err){
+        setMsg("摄像头授权失败："+err.message,"error");
+    }
+}
+
+stopBtn.onclick = ()=>{
+    if(timerId) clearInterval(timerId);
+    if(stream){
+        stream.getTracks().forEach(t=>t.stop());
+    }
+    video.srcObject = null;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    setMsg("已停止采集");
+}
+</script>
+</body>
+</html>

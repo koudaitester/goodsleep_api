@@ -148,7 +148,7 @@ function renderResult(res){
       <div style="color:#2563eb">${res.suggest}</div>
     </div>
     <div class="trace-block">
-      贝叶斯后验概率：${res.bayes.posterior}<br/>
+      风险p：${res.bayes.posterior}<br/>
       推理链路：${res.bayes.trace.join("；")}<br/>
       证据数量：${res.bayes.evidence_count}
     </div>
@@ -203,7 +203,7 @@ runBtn.onclick = async ()=>{
       body:JSON.stringify(payload)
     });
     const eJson = await eResp.json();
-    if(!eResp.ok) throw new Error("Eval失败："+JSON.stringify(eJson));
+    if(!eResp.ok) throw new Error(JSON.stringify(eJson));
     setMsg("评估完成","success");
     renderResult(eJson);
   }catch(e){
