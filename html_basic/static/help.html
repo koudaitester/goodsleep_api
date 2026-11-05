@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>使用帮助 | GoodSleep 睡眠环境评估</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui, -apple-system, BlinkMacSystemFont, sans-serif}
+body{background:#f0f4f9;padding:24px;color:#222;line-height:1.65}
+.page-title{font-size:24px;font-weight:500;margin-bottom:6px;color:#1f2937}
+.page-subtitle{font-size:15px;color:#64748b;margin-bottom:28px}
+.card{background:#ffffff;border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,0.06);margin-bottom:20px}
+.card h2{font-size:18px;color:#1f2937;margin-bottom:14px;border-left:4px solid #3b82f6;padding-left:10px}
+.card p{color:#475569;margin-bottom:12px}
+ul{padding-left:22px;color:#475569;margin-bottom:12px}
+li{margin-bottom:8px}
+.tip{background:#eff6ff;color:#1d4ed8;padding:12px;border-radius:10px}
+.back-btn{display:inline-block;padding:10px 18px;background:#3b82f6;color:#fff;border-radius:10px;text-decoration:none;margin-bottom:20px}
+.back-btn:hover{background:#2563eb}
+.wrap{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:24px;
+    max-width:1400px;
+}
+@media (max-width: 768px) {
+    body {
+        padding: 16px;
+    }
+    .page-title {
+        font-size: 20px;
+    }
+    .card {
+        padding: 16px;
+    }
+    .back-btn {
+        padding: 8px 14px;
+    }
+    .wrap {
+        grid-template-columns: 1fr;
+    }
+}
+
+</style>
+</head>
+<body>
+<a class="back-btn" href="./index_day.html">← 返回主页</a>
+<h1 class="page-title">GoodSleep 睡眠环境评估 · 使用帮助</h1>
+<p class="page-subtitle">包含图片识别、视频流识别两项评估功能</p>
+
+<div class="card">
+<h2>📷 图片识别</h2>
+<ul>
+<li>上传卧室实拍照片，系统识别卧室环境细节：墙面水渍、霉菌痕迹、物品杂乱、床品状态、通风、电子设备等</li>
+<li>额外填写环境参数：温度、湿度、入睡时间（睡眠起始小时）</li>
+<li>提交后返回综合睡眠风险评估，包含风险等级、问题描述与改善建议</li>
+</ul>
+<div class="tip">提示：尽量正对墙面、角落、美缝等潮湿高发区域拍摄，光线充足，不要逆光。</div>
+</div>
+
+<div class="card">
+<h2>🎥 视频识别</h2>
+<ul>
+<li>调用本机摄像头，定时自动截图，复用图片识别的评估逻辑</li>
+<li>同样需要填写：温度、湿度、入睡时间</li>
+<li>持续预览画面，自动采样、自动提交评估，实时刷新风险结果</li>
+</ul>
+<div class="tip">提示：视频模式会持续采样，适合长时间观察同一个卧室角落；可以随时关闭摄像头。</div>
+</div>
+
+<div class="card">
+<h2>🌡️ 参数说明</h2>
+<ul>
+<li><strong>温度</strong>：室内环境温度</li>
+<li><strong>湿度</strong>：室内相对湿度</li>
+<li><strong>睡眠起始小时</strong>：几点上床入睡</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>ℹ️ 评估逻辑说明</h2>
+<ul>
+<li>独立风险项采用加权打分；湿度+潮湿痕迹这一组耦合风险，使用贝叶斯二元模型计算</li>
+<li>输出风险等级：低风险 / 中风险 / 高风险，附带对应的优化建议</li>
+<li>所有计算本地API完成，识别结果可复现，日志可追溯</li>
+</ul>
+</div>
+
+</body>
+</html>

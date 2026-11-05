@@ -43,6 +43,30 @@ body{background:#f0f4f9;padding:24px;color:#222;line-height:1.65}
 .raw-box{display:none;background:#f1f5f9;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;max-height:220px;overflow:auto;color:#555}
 .raw-box.show{display:block}
 .footer-note{grid-column:1/-1;margin-top:16px;font-size:13px;color:#ca8a04}
+.wrap{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:24px;
+    max-width:1400px;
+}
+@media (max-width: 768px) {
+    body {
+        padding: 16px;
+    }
+    .page-title {
+        font-size: 20px;
+    }
+    .card {
+        padding: 16px;
+    }
+    .back-btn {
+        padding: 8px 14px;
+    }
+    .wrap {
+        grid-template-columns: 1fr;
+    }
+}
+
 </style>
 </head>
 <body>

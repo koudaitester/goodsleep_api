@@ -1,36 +1,89 @@
-# GoodSleep
-Local sleep & indoor environment assessment service.
+# GoodSleep API README
+## 项目简介
+GoodSleep API 是面向睡眠人居环境风险评估的轻量化 FastAPI 服务，主打图像/视频多模态视觉识别 + 环境参数联合评估，用于识别卧室潮湿、霉斑、杂物、电子设备等不利于睡眠的环境风险，输出风险概率、风险等级、改善建议。
+> 脚手架版本：v0.1，本项目同时作为图像识别类项目的参考 Demo，可直接复用脚手架快速新建同类识别服务。
 
-GoodSleep collects indoor environmental parameters, evaluates sleep-friendliness, and provides local analysis suggestions. All data stays on your device.
+## 核心特性
+1. **评估引擎**
+    - 保留原有 Delta 加权打分体系
+    - 耦合变量（湿度+霉菌）单独使用二元贝叶斯函数计算后验概率，替换多条独立规则，兼顾可解释性与准确度
+    - 贝叶斯逻辑下沉到 `utils/common.py`，作为通用工具函数，不侵入主评估流程
+2. **输入能力**
+    - 图片识别：上传卧室图片，视觉提取特征（霉斑水渍、杂物、家具摆放、电子设备、被褥状态等）
+    - 视频识别：上传视频帧分析
+    - 配套环境参数：温度、湿度、CO₂、噪音、照度、入睡时间等
+3. **前端页面**
+    - Index 主评估页：支持图片/视频上传、参数填写、结果展示
+    - 使用帮助页：功能说明
+    - 响应式适配：大屏左右分栏，手机端自动纵向排布，适配移动端演示
+4. **工程轻量化**
+    - 极简 FastAPI 分层架构：`config` / `routers` / `schemas` / `services` / `utils`
+    - 自带日志、参数Pydantic校验
+    - 配套 `.gitignore`，脚手架脚本一键生成新项目骨架
+    - 无重型依赖，本地 Ollama / 多模态模型可按需接入，满足秒级推理演示
 
-> Environment shapes sleep.
+## 目录结构
+```
+goodsleep_api/
+├── config/                 # 配置
+├── routers/                # 路由接口
+├── schemas/                # Pydantic 请求/响应结构体
+├── services/
+│   ├── sleep_env_service.py  # 睡眠环境评估主服务
+│   └── log_service.py        # 日志服务
+├── utils/
+│   ├── common.py           # 公共工具，包含二元贝叶斯计算函数
+│   └── validator.py        # 参数校验
+├── html_basic/             # 前端静态页面（index、帮助页）
+├── knowledge/              # 知识库/规则文本（预留）
+├── .gitignore
+├── README.md
+├── requirements.txt
+└── gen_scaffold.py         # 脚手架生成脚本 v0.1
+```
 
-> An eidolon is not the person. It is the echo left behind.
-
-## ✅ Prerequisites
-- Python >= 3.11
-- Git
-- (Optional) Local LLM runtime: Ollama / llama.cpp
-
-## 📦 Install & Run
+## 快速启动
 ```bash
-# Clone repo
-git clone <your-repo-url>
-cd eidolon
-
-# Create virtual environment
+# 1. 创建虚拟环境
 python -m venv .venv
+source .venv/bin/activate  # mac/linux
+# .venv\Scripts\activate  # windows
 
-# Activate venv
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-# Windows (CMD)
-.venv\Scripts\activate.bat
-# Linux / macOS
-source .venv/bin/activate
-
-# Install dependencies
+# 2. 安装依赖
 pip install -r requirements.txt
 
-# Start FastAPI service
-uvicorn api:app --host 127.0.0.1 --port 8000 --reload
+# 3. 启动服务
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+访问地址：
+- 首页：[http://127.0.0.1:8000](http://127.0.0.1:8000)
+- 接口文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+## 接口说明
+`POST /api/v1/sleep/vision`
+- 请求：图片/视频 + 环境参数（temperature、humidity、sleep_start_hour 等）
+- 返回：风险命中ID、风险描述、优化建议、贝叶斯后验概率、trace 调试链路
+
+## 算法说明
+> 设计思路：不全量迁移至复杂贝叶斯网络，折中方案
+1. 大部分独立风险因子继续使用 delta 加权打分，维护简单、调参直观
+2. 存在强耦合的成对变量（**湿度 ↔ 霉菌**），单独调用贝叶斯函数计算条件概率，映射为风险增量
+3. 保留兜底业务规则，可随时新增、调整判定阈值；适合演示、边界测试，后期可按需扩展更多耦合对子图
+4. 不使用复杂通用贝叶斯库，手写轻量贝叶斯工具，保证推理速度满足秒级输出
+
+## 脚手架使用（v0.1）
+```bash
+python gen_scaffold.py
+```
+一键生成同架构的图像识别类FastAPI项目骨架，自带目录、gitignore、空README，适合快速搭建同类视觉评估POC。
+
+## 演示要点
+- 图片上传：卧室实拍，识别霉斑、水渍、杂乱、靠墙床、电子设备
+- 组合参数：搭配温湿度，高湿+霉斑场景会触发贝叶斯联合评估，风险显著拉高
+- 移动端打开页面自动纵向排版，适合现场演示
+
+## 待优化清单（按需迭代）
+- 持续校准贝叶斯先验、条件概率参数
+- 可扩展更多耦合变量对子图
+- 滑动窗口时序评估（历史环境趋势，当前暂未接入）
+- 规则配置外置（从代码硬编码挪到yaml，当前优先保证演示稳定）
